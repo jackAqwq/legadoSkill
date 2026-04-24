@@ -4,7 +4,7 @@
   "bookSourceName": "🗨️ 悦听吧",
   "bookSourceType": 1,
   "bookSourceUrl": "`http://www.yuetingba.cn`",
-  "bookUrlPattern": "https?://www\\.yuetingba\\.cn/albums/\\d+(?:/index\\.html)?(?:\\?.*)?$",
+  "bookUrlPattern": "https?://www\\.yuetingba\\.cn/book/detail/[a-f0-9-]+(?:/\\d+)?(?:\\?.*)?$",
   "customButton": false,
   "customOrder": 4,
   "enabled": false,
@@ -17,12 +17,12 @@
   "lastUpdateTime": 1777043033000,
   "respondTime": 180000,
   "ruleBookInfo": {
-    "author": ".books-detail-info@.info-rows@.row-item.0@span.1@text",
-    "coverUrl": ".books-detail-cover@img@src",
-    "intro": ".books-detail@.container.0@.row@div[-4:-1]@html",
-    "kind": ".books-detail-info@.info-rows@.row-item@text",
-    "lastChapter": ".books-detail-info@.info-rows@.row-item:last-child@text",
-    "name": "h1.book-detail-title@text"
+    "author": "@js:var bookAuthorMatch = src.match(/var\s+bookAuthorName\s*=\s*'([^']*?)'/); bookAuthorMatch ? bookAuthorMatch[1] : ''",
+    "coverUrl": "@js:var bookImageMatch = src.match(/var\s+bookImageUrl\s*=\s*'([^']*?)'/); bookImageMatch ? bookImageMatch[1] : ''",
+    "intro": "@js:var mainAsMatch = src.match(/var\s+mainAs\s*=\s*'([^']*?)'/); mainAsMatch ? mainAsMatch[1] : ''",
+    "kind": "",
+    "lastChapter": "",
+    "name": "@js:var bookNameMatch = src.match(/var\s+bookName\s*=\s*'([^']*?)'/); bookNameMatch ? bookNameMatch[1] : ''"
   },
   "ruleContent": {
     "content": "@js:\nbindEnv(java);\nvar $ = JSON.parse(src);\nvar n = ($.id || '').replace(/-/g, '');\nvar i = ($.creationTime || '').replace(/[-:T. ]/g, '');\nwhile (i.length < 20) {\n    i += '0';\n}\nif (!n || !i || !$.efi) {\n    java.log('ruleContent missing fields: id=' + $.id + ' creationTime=' + $.creationTime + ' efi=' + $.efi);\n    result = '';\n} else {\n    var path = d($.efi, n, i);\n    if (!path) {\n        java.log('ruleContent decrypt path empty');\n        result = '';\n    } else {\n        var audioSk = java.get('audioSk');\n        var audioBookId = java.get('audioBookId') || $.bookId || '';\n        var supportIpv6 = java.get('audioSupportIpv6') == '1';\n        var serverListText = java.get('audioServerList');\n        var serverList = [];\n        if (serverListText) {\n            try {\n                serverList = JSON.parse(serverListText);\n            } catch (e) {}\n        }\n        if (serverList.length == 0) {\n            var preferred = java.get('audioServer');\n            if (preferred) {\n                serverList = [{\n                    Scheme: preferred.split('://')[0],\n                    Value: preferred.replace(/^https?:\/\//, '').replace(/:\d+$/, ''),\n                    Port: preferred.match(/:(\\d+)$/) ? preferred.match(/:(\\d+)$/)[1] : '',\n                    Type: 'A',\n                    AsType: '1',\n                    Ratio: 0,\n                    BookIds: null,\n                    CateNos: null\n                }];\n            }\n        }\n        var headersJson = java.get('audioHeaders') || getAudioHeadersJson();\n        var items = buildCandidateItems(serverList, audioBookId, supportIpv6, path, audioSk);\n        var playableItem = pickPlayableItem(items, headersJson);\n        result = wrapPlayUrl(playableItem ? playableItem.url : '', headersJson);\n    }\n}"
@@ -37,19 +37,19 @@
     "name": ".box-list-item-text-title@text"
   },
   "ruleSearch": {
-    "author": "span@title##\n## 演播：",
+    "author": ".box-list-item-text-autspeaker@span.1@text",
     "bookList": ".section-box-list-item",
-    "bookUrl": "a.0@href",
-    "coverUrl": "img@src",
+    "bookUrl": ".box-list-item-img@a@href",
+    "coverUrl": ".box-list-item-img@img@src",
     "intro": ".box-list-item-text-intro@text",
-    "name": ".box-list-item-text-title@text"
+    "name": ".box-list-item-text-title@a@text"
   },
   "ruleToc": {
-    "chapterList": "@js:\nbindEnv(java);\nvar l = java.getElements('.ting-list-content-item>.col-md-10>a');\nvar asslMatch = src.match(/var\\s+assl\\s*=\\s*'([^']*?)'/);\nvar esMatch = src.match(/var\\s+es\\s*=\\s*'([^']*?)'/);\nvar bookIdMatch = src.match(/var\\s+bookId\\s*=\\s*'([^']*?)'/);\nif (!asslMatch || !bookIdMatch) {\n    java.log('ruleToc missing assl or bookId');\n    list = [];\n} else {\n    var assl = asslMatch[1];\n    var bookId = bookIdMatch[1];\n    var supportIpv6 = /var\\s+vs\\s*=\\s*true/.test(src);\n    var fixed = fixAsslInfo(assl, esMatch ? esMatch[1] : 0);\n    var serverList = JSON.parse(AesDecode(fixed.assl));\n    var preferred = pickPreferredServer(serverList, bookId, supportIpv6);\n    java.put('audioServerList', JSON.stringify(serverList));\n    java.put('audioBookId', bookId);\n    java.put('audioSupportIpv6', supportIpv6 ? '1' : '0');\n    java.put('audioServer', preferred);\n    java.put('audioSk', fixed.sk);\n    java.put('audioHeaders', getAudioHeadersJson());\n    list = [];\n    l.forEach(function(a) {\n        var text = a.text();\n        var onclick = a.attr('onclick') || '';\n        var idMatch = onclick.match(/'([^']+)/);\n        if (idMatch) {\n            list.push({\n                text: text,\n                href: '/api/app/docs-listen/' + idMatch[1] + '/ting-with-efi'\n            });\n        }\n    });\n    list;\n}",
+    "chapterList": "@js:\nbindEnv(java);\nvar l = java.getElements('.ting-list-content-item');\nvar asslMatch = src.match(/var\\s+assl\\s*=\\s*'([^']*?)'/);\nvar esMatch = src.match(/var\\s+es\\s*=\\s*'([^']*?)'/);\nvar bookIdMatch = src.match(/var\\s+bookId\\s*=\\s*'([^']*?)'/);\nif (!asslMatch || !bookIdMatch) {\n    java.log('ruleToc missing assl or bookId');\n    list = [];\n} else {\n    var assl = asslMatch[1];\n    var bookId = bookIdMatch[1];\n    var supportIpv6 = /var\\s+vs\\s*=\\s*true/.test(src);\n    var fixed = fixAsslInfo(assl, esMatch ? esMatch[1] : 0);\n    var serverList = JSON.parse(AesDecode(fixed.assl));\n    var preferred = pickPreferredServer(serverList, bookId, supportIpv6);\n    java.put('audioServerList', JSON.stringify(serverList));\n    java.put('audioBookId', bookId);\n    java.put('audioSupportIpv6', supportIpv6 ? '1' : '0');\n    java.put('audioServer', preferred);\n    java.put('audioSk', fixed.sk);\n    java.put('audioHeaders', getAudioHeadersJson());\n    list = [];\n    l.forEach(function(item) {\n        var a = item.select('.col-md-10>a')[0];\n        if (a) {\n            var text = a.text();\n            var onclick = a.attr('onclick') || '';\n            var idMatch = onclick.match(/'([^']+)/);\n            if (idMatch) {\n                list.push({\n                    text: text,\n                    href: '/api/app/docs-listen/' + idMatch[1] + '/ting-with-efi'\n                });\n            }\n        }\n    });\n    list;\n}",
     "chapterName": "text",
     "chapterUrl": "href",
-    "nextTocUrl": "ul[role=\"tablist\"]@li@a@href"
+    "nextTocUrl": ""
   },
-  "searchUrl": "@js:'`http://www.yuetingba.cn/Search?type=1&name=`'+java.encodeURI(key)",
+  "searchUrl": "@js:'`http://www.yuetingba.cn/search?type=1&name=`'+java.encodeURI(key)",
   "weight": 0
 }
