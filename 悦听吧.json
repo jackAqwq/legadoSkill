@@ -5,7 +5,7 @@
     "bookSourceName": "🗨️ 悦听吧",
     "bookSourceType": 1,
     "bookSourceUrl": "http://yuetingba.cn",
-    "bookUrlPattern": "https?://(?:www\\.)?yuetingba\\.cn/book/detail/[a-f0-9-]+(?:/\\d+)?(?:\\?.*)?$",
+    "bookUrlPattern": "https?://(?:www\\.)?yuetingba\\.cn/book/detail/[a-f0-9-]+/\\d+(?:\\?.*)?$",
     "customButton": false,
     "customOrder": 4,
     "enabled": true,
@@ -46,7 +46,7 @@
       "name": ".box-list-item-text-title@text"
     },
     "ruleToc": {
-      "chapterList": "@js:\nbindEnv(java);\nvar l = java.getElements('.ting-list-content-item>.col-md-10>a');\nvar assl = src.match(/var\\s+assl\\s*=\\s*'([^']+)/)[1];\nvar esMatch = src.match(/var\\s+es\\s*=\\s*'([^']+)/);\nvar bookId = src.match(/var\\s+bookId\\s*=\\s*'([^']+)/)[1];\nvar supportIpv6 = /var\\s+vs\\s*=\\s*true/.test(src);\nvar fixed = fixAsslInfo(assl, esMatch ? esMatch[1] : 0);\nvar serverList = JSON.parse(AesDecode(fixed.assl));\nvar preferred = pickPreferredServer(serverList, bookId, supportIpv6);\njava.put('audioServerList', JSON.stringify(serverList));\njava.put('audioBookId', bookId);\njava.put('audioSupportIpv6', supportIpv6 ? '1' : '0');\njava.put('audioServer', preferred);\njava.put('audioSk', fixed.sk);\njava.put('audioHeaders', getAudioHeadersJson());\nlist = [];\nl.forEach(function(a) {\n    var text = a.text();\n    var onclick = a.attr('onclick') || '';\n    var id = onclick.match(/'([^']+)/)[1];\n    list.push({\n        text: text,\n        href: '/api/app/docs-listen/' + id + '/ting-with-efi'\n    });\n});\nlist",
+      "chapterList": "@js:bindEnv(java);var l = java.getElements('.ting-list-content-item>.col-md-10>a');var assl = src.match(/var\\s+assl\\s*=\\s*'([^']+)/)[1];var esMatch = src.match(/var\\s+es\\s*=\\s*'([^']+)/);var bookId = src.match(/var\\s+bookId\\s*=\\s*'([^']+)/)[1];var supportIpv6 = false;var fixed = fixAsslInfo(assl, esMatch ? esMatch[1] : 0);var serverList = JSON.parse(AesDecode(fixed.assl));var preferred = pickPreferredServer(serverList, bookId, supportIpv6);java.put('audioServerList', JSON.stringify(serverList));java.put('audioBookId', bookId);java.put('audioSupportIpv6', supportIpv6 ? '1' : '0');java.put('audioServer', preferred);java.put('audioSk', fixed.sk);java.put('audioHeaders', getAudioHeadersJson());list = [];l.forEach(function(a) {var text = a.text();var onclick = a.attr('onclick') || '';var id = onclick.match(/'([^']+)/)[1];list.push({text: text, href: '/api/app/docs-listen/' + id + '/ting-with-efi'});});list",
       "chapterName": "text",
       "chapterUrl": "href",
       "nextTocUrl": "ul[role=\"tablist\"]@li@a@href"
