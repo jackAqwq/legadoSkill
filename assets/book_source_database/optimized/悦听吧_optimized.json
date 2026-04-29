@@ -1,0 +1,59 @@
+[
+{
+  "bookSourceComment": "legado-book-source-tamer 重写优化版：按当前 yuetingba.cn 页面结构编写。详情 init 缓存 assl/sk/serverList 和已选 AsType=1 音频节点，正文接口解 efi 后复用缓存节点拼接音频 URL，并为音频直链附加 Referer 请求头。",
+  "bookSourceGroup": "有声",
+  "bookSourceName": "悦听吧",
+  "bookSourceType": 1,
+  "bookSourceUrl": "http://yuetingba.cn",
+  "bookUrlPattern": "https?://(www\\.)?yuetingba\\.cn/book/detail/[\\w-]+/\\d+(?:\\?.*)?$",
+  "customOrder": 0,
+  "enabled": true,
+  "enabledCookieJar": true,
+  "enabledExplore": true,
+  "header": "{\"User-Agent\":\"Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile Safari/537.36\",\"Accept\":\"*/*\",\"Accept-Encoding\":\"identity\",\"Referer\":\"http://yuetingba.cn/\"}",
+  "jsLib": "var __legadoJava = null;\n\nfunction bindEnv(java) {\n    __legadoJava = java;\n}\n\nfunction getLegadoJava() {\n    if (__legadoJava) return __legadoJava;\n    try {\n        if (java) return java;\n    } catch (e) {}\n    throw 'Legado java helper unavailable';\n}\n\nfunction ytbAudioHeaders() {\n    return {\n        'User-Agent': 'okhttp/4.12.0',\n        'Accept': '*/*',\n        'Accept-Encoding': 'identity',\n        'Referer': 'http://yuetingba.cn/'\n    };\n}\n\nfunction ytbAesDecode(data) {\n    var j = getLegadoJava();\n    var key = j.base64DecodeToByteArray('le95G3hnFDJsBE+1/v9eYw==');\n    var iv = j.base64DecodeToByteArray('IvswQFEUdKYf+d1wKpYLTg==');\n    data = String(data || '').replace(/[\\r\\n\\s]/g, '');\n    return j.createSymmetricCrypto('AES/CBC/PKCS7Padding', key, iv).decryptStr(data);\n}\n\nfunction ytbKey(t, n) {\n    var result = '';\n    var i;\n    for (i = 0; i < 20; i++) {\n        result += String.fromCharCode(t.charCodeAt(i) + Number(n.charAt(i)));\n    }\n    for (i = 20; i < t.length; i++) {\n        result += String.fromCharCode(t.charCodeAt(i) + Number(n.charAt(i - 20)));\n    }\n    return result;\n}\n\nfunction ytbIv(t, n) {\n    var result = '';\n    var i;\n    for (i = 20; i > 4; i--) {\n        result += String.fromCharCode(t.charCodeAt(i) + Number(n.charAt(i - 1)));\n    }\n    return result;\n}\n\nfunction ytbDecodeEfi(efi, tingId, creationTime) {\n    var j = getLegadoJava();\n    var idNoDash = String(tingId || '').replace(/-/g, '');\n    var digits = String(creationTime || '').replace(/[-:T. ]/g, '');\n    while (digits.length < 20) {\n        digits += '0';\n    }\n    efi = String(efi || '').replace(/[\\r\\n\\s]/g, '');\n    return j.createSymmetricCrypto('AES/CBC/PKCS7Padding', ytbKey(idNoDash, digits), ytbIv(idNoDash, digits)).decryptStr(efi);\n}\n\nfunction ytbFixAssl(assl, es) {\n    var result = {\n        assl: String(assl || ''),\n        sk: 'xMiP5W1DHBxC5PwQ5oj5QfRn0tsT5UBk'\n    };\n    es = Number(es || 0);\n    if (es < 300) {\n        es = result.assl.charCodeAt(0);\n        if (result.assl.length - 32 > es) {\n            result.sk = result.assl.substring(es, es + 32);\n            result.assl = result.assl.substring(0, es) + result.assl.substr(es + 32);\n        } else {\n            result.sk = result.assl.substr(result.assl.length - 32);\n            result.assl = result.assl.substr(0, result.assl.length - 32);\n        }\n    } else {\n        result.assl = result.assl.replace(result.sk, '');\n    }\n    return result;\n}\n\nfunction ytbServerUrl(item) {\n    if (!item) return '';\n    if (item.Type == 'AAAA') {\n        return item.Scheme + '://[' + item.Value + ']:' + item.Port;\n    }\n    return item.Scheme + '://' + item.Value + ':' + item.Port;\n}\n\nfunction ytbBookSuffix(bookId) {\n    var parts = String(bookId || '').split('-');\n    return parts.length > 4 ? parts[4] : '';\n}\n\nfunction ytbRatio(value) {\n    var ratio = (Number(value)||0);\n    if (isNaN(ratio) || ratio < 0) return 0;\n    return ratio;\n}\n\nfunction ytbPickByRatio(list) {\n    if (!list || list.length == 0) return null;\n    var total = 0;\n    var i;\n    for (i = 0; i < list.length; i++) {\n        total += ytbRatio(list[i].Ratio);\n    }\n    if (total <= 0) return list[0];\n    var point = Math.floor(Math.random() * total) + 1;\n    var sum = 0;\n    for (i = 0; i < list.length; i++) {\n        sum += ytbRatio(list[i].Ratio);\n        if (point <= sum) return list[i];\n    }\n    return list[list.length - 1];\n}\n\nfunction ytbPickAudioServer(list, bookId, supportIpv6) {\n    var audio = [];\n    var i;\n    for (i = 0; list && i < list.length; i++) {\n        if (list[i].AsType == 1 && (supportIpv6 || list[i].Type == 'A')) {\n            audio.push(list[i]);\n        }\n    }\n    if (audio.length == 0) return '';\n\n    var suffix = ytbBookSuffix(bookId);\n    var matched = [];\n    if (suffix) {\n        for (i = 0; i < audio.length; i++) {\n            if (audio[i].BookIds && String(audio[i].BookIds).indexOf(suffix) >= 0) {\n                matched.push(audio[i]);\n            }\n        }\n    }\n    if (matched.length > 0) {\n        audio = matched;\n    } else if (audio.length > 1) {\n        var ratioList = [];\n        for (i = 0; i < audio.length; i++) {\n            if (ytbRatio(audio[i].Ratio) > 0) ratioList.push(audio[i]);\n        }\n        if (ratioList.length > 0) audio = ratioList;\n\n        var emptyBookIds = [];\n        for (i = 0; i < audio.length; i++) {\n            if (!audio[i].BookIds || String(audio[i].BookIds).replace(/\\s/g, '') == '') {\n                emptyBookIds.push(audio[i]);\n            }\n        }\n        if (emptyBookIds.length > 0) audio = emptyBookIds;\n    }\n\n    return ytbServerUrl(ytbPickByRatio(audio));\n}\n\nfunction ytbFileName(url) {\n    url = String(url || '');\n    var s = url.lastIndexOf('/');\n    if (s < 0) return '';\n    var e = url.indexOf('?', s);\n    if (e < 0) e = url.indexOf('#', s);\n    if (e < 0) e = url.length;\n    return url.substring(s + 1, e);\n}\n\nfunction ytbBuildPlayUrl(baseUrl, path, sk) {\n    var raw = String(baseUrl || '') + String(path || '');\n    var fileName = ytbFileName(raw);\n    if (!fileName || !sk) return raw;\n    var expire = Math.floor(new Date().getTime() / 1000) + 600;\n    var token = getLegadoJava().md5Encode(fileName + '|' + expire + '|' + sk);\n    return raw + '?token=' + token + '&expire=' + expire;\n}\n\nfunction ytbInitBookPage(html) {\n    var j = getLegadoJava();\n    html = String(html || '');\n    try {\n        var asslMatch = html.match(/var\\s+assl\\s*=\\s*'([^']+)/);\n        var bookIdMatch = html.match(/var\\s+bookId\\s*=\\s*'([^']+)/);\n        if (!asslMatch || !bookIdMatch) return html;\n        var esMatch = html.match(/var\\s+es\\s*=\\s*'([^']+)/);\n        var supportIpv6 = /var\\s+vs\\s*=\\s*true/.test(html);\n        var fixed = ytbFixAssl(asslMatch[1], esMatch ? esMatch[1] : 0);\n        var serverList = JSON.parse(ytbAesDecode(fixed.assl));\n        var bookId = bookIdMatch[1];\n        var audioBaseUrl = ytbPickAudioServer(serverList, bookId, supportIpv6);\n        j.put('ytbBookId', bookId);\n        j.put('ytbSk', fixed.sk);\n        j.put('ytbServerList', JSON.stringify(serverList));\n        j.put('ytbSupportIpv6', supportIpv6 ? '1' : '0');\n        j.put('ytbAudioBaseUrl', audioBaseUrl);\n        j.put('ytbCacheBookId', bookId);\n        j.put('ytbAudioHeaders', JSON.stringify(ytbAudioHeaders()));\n    } catch (e) {\n        j.put('ytbInitError', String(e));\n    }\n    return html;\n}\n\nfunction ytbEnsureBookPageLoaded(expectedBookId) {\n    var j = getLegadoJava();\n    if (j.get('ytbServerList')) {\n        var cacheBookId = j.get('ytbCacheBookId') || j.get('ytbBookId');\n        if (!expectedBookId || cacheBookId == expectedBookId) return;\n    }\n    try {\n        if (book && book.bookUrl) {\n            var html = j.ajax(book.bookUrl);\n            ytbInitBookPage(html);\n        }\n    } catch (e) {}\n}",
+  "lastUpdateTime": 1777347743700,
+  "respondTime": 60000,
+  "exploreUrl": "@js:var s={layout_flexGrow:1,layout_flexShrink:1,layout_alignSelf:'auto',layout_flexBasisPercent:0.29,layout_wrapBefore:false};var tabs=[['首页','/'],['最新','/top/latest/{{page}}'],['推荐','/top/recommend/{{page}}'],['玄幻','/book/1/{{page}}'],['历史','/book/2/{{page}}'],['武侠','/book/3/{{page}}'],['都市','/book/4/{{page}}'],['科幻','/book/5/{{page}}'],['名著','/book/6/{{page}}'],['女频','/book/7/{{page}}'],['社科','/book/8/{{page}}'],['儿童','/book/9/{{page}}']];JSON.stringify(tabs.map(function(it){return {title:it[0],url:it[1],style:s};}))",
+  "searchUrl": "@js:'http://yuetingba.cn/Search?type=1&name='+java.encodeURI(key)+'&pageIndex={{page}}'",
+  "ruleSearch": {
+    "bookList": ".section-box-list-item",
+    "name": ".box-list-item-text-title@a@text",
+    "author": ".box-list-item-text-autspeaker@span.0@text",
+    "kind": ".box-list-item-text-autspeaker@span.1@text##^##演播：",
+    "intro": ".box-list-item-text-intro@text",
+    "coverUrl": ".box-list-item-img@img@src",
+    "bookUrl": ".box-list-item-text-title@a@href"
+  },
+  "ruleExplore": {
+    "bookList": ".section-box-list-item",
+    "name": ".box-list-item-text-title@a@text",
+    "author": ".box-list-item-text-autspeaker@span.0@text",
+    "kind": ".box-list-item-text-autspeaker@span.1@text##^##演播：",
+    "intro": ".box-list-item-text-intro@text",
+    "coverUrl": ".box-list-item-img@img@src",
+    "bookUrl": ".box-list-item-text-title@a@href"
+  },
+  "ruleBookInfo": {
+    "init": "@js:bindEnv(java);ytbInitBookPage(src);src",
+    "name": "h1.book-detail-title@text",
+    "author": ".text-desc-content.0@text",
+    "kind": ".text-desc-content.1@text",
+    "intro": ".text-desc-content.5@html",
+    "coverUrl": ".books-detail-img@img@src",
+    "lastChapter": ".text-desc-content.4@text##^##共 ##$## 集",
+    "tocUrl": ""
+  },
+  "ruleToc": {
+    "chapterList": ".ting-list-content-item>.col-md-10>a[onclick]",
+    "chapterName": "text",
+    "chapterUrl": "onclick##.*?'([^']+)'.*##/api/app/docs-listen/$1/ting-with-efi",
+    "nextTocUrl": "ul[role=\"tablist\"]@li@a@href"
+  },
+  "ruleContent": {
+    "content": "@js:\nbindEnv(java);\nvar data = JSON.parse(src), item = data && data.data ? data.data : data;\nif (!item || !item.efi || !item.id || !item.creationTime) {\n    result = '';\n} else {\n    var cachedBookId = java.get('ytbBookId');\n    var bookId = item.bookId || cachedBookId || '';\n    ytbEnsureBookPageLoaded(bookId);\n    var baseUrl = java.get('ytbAudioBaseUrl') || '';\n    if (!baseUrl) {\n        var serverList = [];\n        try {\n            serverList = JSON.parse(java.get('ytbServerList') || '[]');\n            var supportIpv6 = java.get('ytbSupportIpv6') == '1';\n            baseUrl = ytbPickAudioServer(serverList, bookId, supportIpv6);\n            if (baseUrl) java.put('ytbAudioBaseUrl', baseUrl);\n        } catch (e) {}\n    }\n    if (!baseUrl) {\n        result = '';\n    } else {\n        var path = ytbDecodeEfi(item.efi, item.id, item.creationTime);\n        var url = ytbBuildPlayUrl(baseUrl, path, java.get('ytbSk'));\n        result = url + ',{\\\"headers\\\":' + (java.get('ytbAudioHeaders') || JSON.stringify(ytbAudioHeaders())) + '}';\n    }\n}",
+    "sourceRegex": "\\.mp3|m4a|wav"
+  },
+  "weight": 0
+}
+]

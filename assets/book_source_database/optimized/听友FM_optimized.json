@@ -1,0 +1,62 @@
+[
+  {
+    "bookSourceComment": "优化版：提取jsLib，searchUrl编码，添加header，降低webView延迟，作者列显示作者+播音，tocUrl留空减少跳转，respondTime优化，详情页增加分类。原始注释：Search/explore parse SSR Nuxt payload without WebView. Detail/toc use album _payload.json. Playback keeps WebView session bootstrap for stability.",
+    "bookSourceGroup": "🗨️ 有声",
+    "bookSourceName": "🗨️ 听友FM",
+    "bookSourceType": 1,
+    "bookSourceUrl": "https://www.tingyou.fm",
+    "bookUrlPattern": "https?://(?:www\\.)?tingyou\\.fm/albums/\\d+(?:/_payload\\.json)?(?:\\?.*)?$",
+    "customButton": false,
+    "customOrder": 4,
+    "enabled": true,
+    "enabledCookieJar": true,
+    "enabledExplore": true,
+    "eventListener": false,
+    "exploreUrl": "@js:var tagStyle={layout_flexGrow:1,layout_flexShrink:1,layout_alignSelf:'auto',layout_flexBasisPercent:0.29,layout_wrapBefore:false};var homeTabs=[['最新','latest'],['热门','hot'],['推荐','recommend'],['连载','serial'],['评书','story']];var cats=[['玄幻奇幻',46],['武侠小说',11],['言情通俗',19],['相声小品',21],['恐怖惊悚',14],['官场商战',17],['历史军事',15],['百家讲坛',9]];JSON.stringify(homeTabs.map(function(it){return {title:it[0],url:'/?legadoTab='+it[1]+'&page={{page}}',style:tagStyle};}).concat(cats.map(function(it){return {title:it[0],url:'/categories/'+it[1]+'?page={{page}}',style:tagStyle};})))",
+    "header": "{\"User-Agent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\",\"Accept-Language\":\"zh-CN,zh;q=0.9\"}",
+    "jsLib": "function clean(value) {\n  return String(value == null ? '' : value).replace(/\\u00a0/g, ' ').replace(/\\s+/g, ' ').trim();\n}\nfunction reviveNuxt(store) {\n  var cache = {};\n  function revive(index) {\n    if (Object.prototype.hasOwnProperty.call(cache, index)) return cache[index];\n    var value = read(store[index], false);\n    cache[index] = value;\n    return value;\n  }\n  function read(node, inContainer) {\n    if (inContainer && typeof node === 'number') return revive(node);\n    if (node == null) return node;\n    if (Array.isArray(node)) {\n      var tag = node[0];\n      if (tag === 'ShallowReactive' || tag === 'Reactive' || tag === 'Ref' || tag === 'EmptyRef') {\n        return revive(node[1]);\n      }\n      if (tag === 'Set') {\n        var setItems = [];\n        for (var si = 1; si < node.length; si++) setItems.push(read(node[si], true));\n        return setItems;\n      }\n      var arr = [];\n      for (var ai = 0; ai < node.length; ai++) arr.push(read(node[ai], true));\n      return arr;\n    }\n    if (typeof node === 'object') {\n      var resultObj = {};\n      for (var key in node) {\n        if (Object.prototype.hasOwnProperty.call(node, key)) resultObj[key] = read(node[key], true);\n      }\n      return resultObj;\n    }\n    return node;\n  }\n  return revive(0);\n}\nfunction parsePayload(raw) {\n  var text = String(raw == null ? '' : raw).trim();\n  if (!text) return null;\n  if (text.charAt(0) === '[') {\n    return reviveNuxt(JSON.parse(text));\n  }\n  var match = text.match(/<script[^>]*id=[\"']__NUXT_DATA__[\"'][^>]*>([\\s\\S]*?)<\\/script>/i);\n  return match ? reviveNuxt(JSON.parse(match[1])) : null;\n}\nfunction buildStatus(status, count) {\n  var statusText = Number(status) === 1 ? '连载中' : '已完结';\n  var total = Number(count || 0);\n  return total ? statusText + ' 共' + total + '期' : statusText;\n}\nfunction getParam(url, name) {\n  var safeUrl = String(url || '');\n  var match = safeUrl.match(new RegExp('[?&]' + name + '=([^&#]*)'));\n  return match ? decodeURIComponent(match[1].replace(/\\+/g, ' ')) : '';\n}\nfunction uniqueLines(text) {\n  var lines = String(text || '').split(/\\n+/).map(function(line) {\n    return clean(line);\n  }).filter(Boolean);\n  if (lines.length === 1) {\n    var one = lines[0];\n    if (one.length % 2 === 0) {\n      var half = one.length / 2;\n      if (one.slice(0, half) === one.slice(half)) {\n        lines = [one.slice(0, half)];\n      }\n    }\n  }\n  var deduped = [];\n  for (var i = 0; i < lines.length; i++) {\n    if (!deduped.length || deduped[deduped.length - 1] !== lines[i]) {\n      deduped.push(lines[i]);\n    }\n  }\n  return deduped;\n}\nfunction buildIntro(detail) {\n  var parts = [];\n  var uploader = clean(detail && detail.uploader);\n  if (uploader && uploader !== '匿名用户') {\n    parts.push('上传：' + uploader);\n  }\n  var synopsis = uniqueLines(detail && detail.synopsis);\n  if (synopsis.length) {\n    parts.push('简介：\\n' + synopsis.join('\\n'));\n  }\n  return parts.join('\\n\\n');\n}\nfunction formatDate(timestamp) {\n  var ts = Number(timestamp || 0);\n  if (!ts) return '';\n  var date = new Date(ts * 1000);\n  if (isNaN(date.getTime())) return '';\n  function pad(num) {\n    num = Number(num || 0);\n    return num < 10 ? '0' + num : String(num);\n  }\n  return date.getFullYear() + '/' + pad(date.getMonth() + 1) + '/' + pad(date.getDate());\n}\nfunction mapAlbumItem(it, kind, tabKey) {\n  if (!it || !it.id) return null;\n  var name = clean(it.title);\n  var author = clean(it.author);\n  var teller = clean(it.teller);\n  var desc = clean(it.desc);\n  var authorParts = [];\n  if (author) authorParts.push('作者：' + author);\n  if (teller) authorParts.push('播音：' + teller);\n  var introParts = [];\n  if (desc && desc !== name) introParts.push(desc);\n  return {\n    name: name,\n    author: authorParts.join('  '),\n    kind: kind,\n    lastChapter: buildStatus(it.status, it.chapterTotal || it.count),\n    intro: introParts.join('  '),\n    coverUrl: clean(it.cover || it.cover_url),\n    bookUrl: 'https://www.tingyou.fm/albums/' + it.id\n  };\n}",
+    "lastUpdateTime": 1777273528040,
+    "respondTime": 180000,
+    "ruleBookInfo": {
+      "author": "author",
+      "coverUrl": "cover_url",
+      "init": "@js:\nvar payload = parsePayload(result);\nvar data = payload && payload.data ? payload.data : null;\nvar base = String(baseUrl || '');\nvar albumIdMatch = base.match(/\\/albums\\/(\\d+)/);\nvar albumId = albumIdMatch ? albumIdMatch[1] : '';\nvar detail = data && albumId ? data['album-detail-' + albumId] : null;\nvar chaptersWrap = data && albumId ? data['album-chapters-' + albumId] : null;\nvar chapters = chaptersWrap && chaptersWrap.chapters;\nvar lastTitle = '';\nif (Array.isArray(chapters) && chapters.length) {\n  lastTitle = clean(chapters[chapters.length - 1].title);\n}\nvar kind = clean(detail && (detail.type || detail.cat));\nvar teller = clean(detail && detail.teller);\nvar cname = clean(detail && detail.categoryName);\nvar tags = [];\nif (cname) tags.push(cname);\nif (kind && kind !== cname) tags.push(kind);\nif (teller) tags.push('播音：' + teller);\nresult = {\n  title: clean(detail && detail.title),\n  author: (function() { var parts = []; var a = clean(detail && detail.author); var t = clean(detail && detail.teller); if (a) parts.push('作者：' + a); if (t) parts.push('播音：' + t); return parts.join('  '); })(),\n  cover_url: clean(detail && detail.cover_url),\n  kind_text: tags.join(','),\n  last_title: lastTitle,\n  intro_text: buildIntro(detail),\n  update_text: formatDate(detail && detail.updated_at),\n  toc_url: ''\n};",
+      "intro": "intro_text",
+      "kind": "kind_text",
+      "lastChapter": "last_title",
+      "name": "title",
+      "tocUrl": "toc_url"
+    },
+    "ruleContent": {
+      "content": "<js>result</js>",
+      "webJs": "(function(){try{var m=location.pathname.match(/\\/albums\\/(\\d+)/);var albumId=m&&m[1];var chapterIdx=parseInt(new URL(location.href).searchParams.get('chapter_idx')||'0',10);if(!albumId||!chapterIdx)return null;if(window.__legadoPlayUrl)return String(window.__legadoPlayUrl);if(window.__legadoBusy)return null;if(typeof window.$fetch!=='function'||typeof window.__checkSession!=='function')return null;window.__legadoBusy=true;(async function(){try{await window.__checkSession({force:true});var data=await window.$fetch('/api/play_token',{method:'POST',body:{album_id:Number(albumId),chapter_idx:chapterIdx}});if(data&&data.play_url){window.__legadoPlayUrl=String(data.play_url);}}catch(e){}finally{window.__legadoBusy=false;}})();return null;}catch(e){return null;}})()"
+    },
+    "ruleExplore": {
+      "author": "author",
+      "bookList": "@js:\nvar out = [];\nvar payload = parsePayload(result);\nif (payload && payload.data) {\n  var data = payload.data;\n  var url = String(baseUrl || '');\n  var host = url.match(/^https?:\\/\\/[^\\/]+/);\n  var site = host ? host[0] : 'https://www.tingyou.fm';\n  var typeMatch = url.match(/\\/categories\\/(\\d+)/);\n  if (typeMatch) {\n    var typeId = Number(typeMatch[1]) || 0;\n    var albums = data['categoryAlbums-' + typeId];\n    var kind = '';\n    if (data.filters && Array.isArray(data.filters.categories)) {\n      outer: for (var gi = 0; gi < data.filters.categories.length; gi++) {\n        var group = data.filters.categories[gi];\n        var types = group && group.types;\n        if (!Array.isArray(types)) continue;\n        for (var ti = 0; ti < types.length; ti++) {\n          var type = types[ti];\n          if (type && Number(type.id) === typeId) {\n            kind = clean(type.name);\n            break outer;\n          }\n        }\n      }\n    }\n    if (albums && Array.isArray(albums.data)) {\n      out = albums.data.map(function(it) { return mapAlbumItem(it, kind); }).filter(function(it) { return it && it.name && it.bookUrl; });\n    }\n  } else {\n    var tabKey = getParam(url, 'legadoTab') || 'latest';\n    var tabs = data['index-home-tabs'];\n    var section = tabs && tabs[tabKey];\n    if (section && Array.isArray(section.items)) {\n      out = section.items.map(function(it) {\n        var kind = clean(it.categoryName);\n        if (kind === '未分类') kind = '';\n        if (tabKey === 'story') kind = '评书';\n        return mapAlbumItem(it, kind, tabKey);\n      }).filter(function(it) { return it && it.name && it.bookUrl; });\n    }\n  }\n}\nout",
+      "bookUrl": "{{result.bookUrl}}/_payload.json",
+      "coverUrl": "coverUrl",
+      "intro": "intro",
+      "kind": "kind",
+      "lastChapter": "lastChapter",
+      "name": "name"
+    },
+    "ruleSearch": {
+      "author": "author",
+      "bookList": "@js:\nvar out = [];\nvar payload = parsePayload(result);\nif (payload && payload.data && payload.data.searchResults && Array.isArray(payload.data.searchResults.list)) {\n  out = payload.data.searchResults.list.map(function(it) {\n    var kind = clean(it.categoryName);\n    if (kind === '未分类') kind = '';\n    return mapAlbumItem(it, kind);\n  }).filter(function(it) { return it && it.name && it.bookUrl; });\n}\nout",
+      "bookUrl": "{{result.bookUrl}}/_payload.json",
+      "coverUrl": "coverUrl",
+      "intro": "intro",
+      "kind": "kind",
+      "lastChapter": "lastChapter",
+      "name": "name"
+    },
+    "ruleToc": {
+      "chapterList": "@js:\nvar out = [];\nvar payload = parsePayload(result);\nvar data = payload && payload.data ? payload.data : null;\nvar base = String(baseUrl || '');\nvar albumIdMatch = base.match(/\\/albums\\/(\\d+)/);\nvar albumId = albumIdMatch ? albumIdMatch[1] : '';\nvar chaptersWrap = data && albumId ? data['album-chapters-' + albumId] : null;\nvar chapters = chaptersWrap && chaptersWrap.chapters;\nvar albumUrl = base.replace(/\\/_payload\\.json(?:\\?.*)?$/, '');\nif (Array.isArray(chapters)) {\n  out = chapters.map(function(it) {\n    if (!it) return null;\n    var idx = Number(it.index || 0);\n    if (!idx) return null;\n    return {\n      title: clean(it.title),\n      url: albumUrl + '?chapter_idx=' + idx + ',{\"webView\":true,\"webViewDelayTime\":1000}'\n    };\n  }).filter(function(it) { return it && it.title && it.url; });\n}\nout",
+      "chapterName": "title",
+      "chapterUrl": "url"
+    },
+    "searchUrl": "@js:'https://www.tingyou.fm/search/result?keyword=' + java.encodeURI(key) + '&page=' + page",
+    "weight": 0
+  }
+]
